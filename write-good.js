@@ -1,14 +1,27 @@
-var weasels  = require('weasel-words'),
-    illusion = require('./lib/lexical-illusions'),
-    so       = require('./lib/starts-with-so');
+var checks = {
+  weasel  : { fn: require('weasel-words'),            explanation: 'is a weasel word' },
+  illusion : { fn: require('./lib/lexical-illusions'), explanation: 'is repeated' },
+  so       : { fn: require('./lib/starts-with-so'),    explanation: 'adds no meaning' },
+  thereIs  : { fn: require('./lib/there-is'),          explanation: 'is unnecessary verbiage' },
+  passive  : { fn: require('passive-voice'),           explanation: 'is passive voice' },
+  adverb   : { fn: require('adverb-where'),            explanation: 'can weaken meaning'},
+  tooWordy : { fn: require('too-wordy'),               explanation: 'is wordy or unneeded'},
+  cliches  : { fn: require('no-cliches'),              explanation: 'is a cliche'},
+};
 
 module.exports = function (text, opts) {
-  return weasels(text).map(reasonable('is a weasel word')).
-      concat(illusion(text).map(reasonable('is repeated'))).
-      concat(so(text).map(reasonable('adds no meaning'))).
-      sort(function (a, b) {
-        return a.index < b.index ? -1 : 1;
-      });
+  opts = opts || {};
+  var suggestions = [];
+  Object.keys(checks).forEach(function (checkName) {
+    if (opts[checkName] !== false) {
+      suggestions = suggestions.concat(checks[checkName].fn(text).
+                          map(reasonable(checks[checkName].explanation)));
+    }
+  });
+
+  return dedup(suggestions).sort(function (a, b) {
+    return a.index < b.index ? -1 : 1;
+  });
 
   function reasonable (reason) {
     return function (suggestion) {
@@ -19,3 +32,21 @@ module.exports = function (text, opts) {
     };
   }
 };
+
+
+function dedup (suggestions) {
+  var dupsHash = {};
+
+  return suggestions.reduce(function(memo, suggestion) {
+    var key = suggestion.index + ":" + suggestion.offset;
+    if (!dupsHash[key]) {
+      dupsHash[key] = suggestion;
+      memo.push(suggestion);
+    } else {
+      dupsHash[key].reason += " and " + suggestion.reason.substring(suggestion.offset + 3);
+    }
+    return memo;
+  }, []);
+}
+
+module.exports.annotate = require('./lib/annotate');
